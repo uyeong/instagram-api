@@ -1,7 +1,12 @@
 const readline = require("readline");
 const { refreshToken } = require("./lib/token");
 const { getProfile, getMyPosts, getPost } = require("./lib/profile");
-const { postImage } = require("./lib/media");
+const {
+  postImage,
+  postLocalImage,
+  postCarousel,
+  postLocalCarousel,
+} = require("./lib/media");
 const { getComments, postComment, replyToComment } = require("./lib/comments");
 
 const rl = readline.createInterface({
@@ -53,14 +58,49 @@ async function handlePosts() {
 }
 
 async function handlePostImage() {
-  const imageUrl = await ask("이미지 URL: ");
-  const caption = await ask("캡션: ");
+  console.log("\n이미지 소스 선택:");
+  console.log("1. URL 입력");
+  console.log("2. 로컬 파일");
+  const sourceChoice = await ask("선택: ");
 
-  if (!imageUrl.trim()) {
-    console.log("이미지 URL을 입력해주세요.");
+  if (sourceChoice !== "1" && sourceChoice !== "2") {
+    console.log("잘못된 선택입니다.");
     return;
   }
-  await postImage(imageUrl.trim(), caption);
+
+  const caption = await ask("캡션: ");
+  const input = await ask(
+    sourceChoice === "1"
+      ? "이미지 URL (여러 장은 쉼표로 구분, 최대 10개): "
+      : "이미지 파일 경로 (여러 장은 쉼표로 구분, 최대 10개): "
+  );
+  const items = input
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (items.length === 0) {
+    console.log("이미지를 입력해주세요.");
+    return;
+  }
+  if (items.length > 10) {
+    console.log("최대 10개까지 가능합니다.");
+    return;
+  }
+
+  if (sourceChoice === "1") {
+    if (items.length === 1) {
+      await postImage(items[0], caption);
+    } else {
+      await postCarousel(items, caption);
+    }
+  } else {
+    if (items.length === 1) {
+      await postLocalImage(items[0], caption);
+    } else {
+      await postLocalCarousel(items, caption);
+    }
+  }
 }
 
 async function handleComments() {
