@@ -80,7 +80,7 @@ instagram-api/
 | `startTunnel(port)` | Start cloudflared quick tunnel. Returns public URL |
 | `stopTunnel()` | Kill tunnel process |
 | `run(fn)` | Script entrypoint wrapper: parse args → load env → refresh token → execute fn → JSON output / error handling |
-| `parseArgs(spec)` | Command-line args parser (includes `--env`) |
+| `parseArgs()` | Command-line args parser. Returns `{ named, positional }` |
 | `loadEnv(envPath?)` | Load specified or default `.env`. Also sets the file path for `refreshToken()` to write to |
 
 ### Script Specifications
