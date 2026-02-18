@@ -32,6 +32,7 @@ instagram-api/
 │   ├── get-posts.js
 │   ├── get-post.js
 │   ├── post-image.js
+│   ├── post-video.js
 │   ├── get-comments.js
 │   ├── post-comment.js
 │   └── reply-comment.js
@@ -74,6 +75,12 @@ instagram-api/
 | `postLocalImage(path, caption)` | Post local image (HTTP server + cloudflared tunnel) |
 | `postCarousel(urls, caption)` | Post URL carousel (child containers → carousel container → publish) |
 | `postLocalCarousel(paths, caption)` | Post local carousel |
+| `validateVideoFile(filePath)` | Validate video file (existence, format, size). Returns `{ absolutePath, mimeType }` |
+| `postVideo(url, caption, options?)` | Post URL video as Reels. options: `coverUrl`, `thumbOffset`, `shareToFeed` |
+| `postLocalVideo(path, caption, options?)` | Post local video as Reels (HTTP server + cloudflared tunnel). Also serves local cover image |
+| `postVideoCarousel(urls, caption)` | Post URL video carousel |
+| `postLocalVideoCarousel(paths, caption)` | Post local video carousel |
+| `VIDEO_CONTAINER_TIMEOUT` | 10 minute timeout for video container processing |
 | `getComments(mediaId)` | Fetch comments + replies |
 | `postComment(mediaId, text)` | Create comment |
 | `replyToComment(commentId, text)` | Create reply |
@@ -188,6 +195,48 @@ node scripts/post-image.js --caption "Caption" ./img1.png ./img2.png ./img3.jpg
 - Starts with `http://` or `https://` → URL. Otherwise → local file path.
 - Image count: 1 → single post, 2+ → carousel.
 - Mixing URLs and local files is not supported.
+
+#### `scripts/post-video.js`
+
+Posts videos as Reels. Automatically switches to carousel when given 2+ files.
+Supports both URLs and local file paths (local files use cloudflared tunnel).
+
+```
+# Single video (URL)
+node scripts/post-video.js --caption "Caption" https://example.com/video.mp4
+
+# Single video (local)
+node scripts/post-video.js --caption "Caption" ./videos/clip.mp4
+
+# With options (single video only)
+node scripts/post-video.js --caption "Caption" --cover https://example.com/cover.jpg --thumb-offset 5000 --share-to-feed true https://example.com/video.mp4
+
+# Carousel (multiple URLs)
+node scripts/post-video.js --caption "Caption" https://example.com/a.mp4 https://example.com/b.mp4
+```
+
+```json
+{ "id": "18158...", "type": "REELS" }
+```
+
+```json
+{ "id": "18068...", "type": "CAROUSEL" }
+```
+
+**Detection logic**:
+- Starts with `http://` or `https://` → URL. Otherwise → local file path.
+- Video count: 1 → Reels post, 2+ → carousel.
+- Mixing URLs and local files is not supported.
+
+**Options** (single video only):
+- `--cover <url-or-path>`: Cover image URL or local file path.
+- `--thumb-offset <ms>`: Thumbnail offset in milliseconds.
+- `--share-to-feed <true|false>`: Whether to share the Reel to the main feed.
+
+**Constraints**:
+- Supported formats: mp4, mov.
+- Maximum file size: 100MB per video.
+- Video processing timeout: 10 minutes.
 
 #### `scripts/get-comments.js`
 

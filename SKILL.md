@@ -1,17 +1,17 @@
 ---
 name: instagram-api
-description: Manage an Instagram account. View profile, list posts, publish images/carousels, and read/write comments. Use when the user requests any Instagram-related task.
+description: Manage an Instagram account. View profile, list posts, publish images/carousels, publish videos/Reels, and read/write comments. Use when the user requests any Instagram-related task.
 allowed-tools: Bash(node scripts/*)
 ---
 
 # Instagram API Skill
 
-A skill for managing an Instagram account via the Instagram Graph API. Supports profile viewing, post management, image publishing, and comment operations.
+A skill for managing an Instagram account via the Instagram Graph API. Supports profile viewing, post management, image publishing, video/Reels publishing, and comment operations.
 
 ## Prerequisites
 
 - A `.env` file with Instagram credentials must be configured (`INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_ACCESS_TOKEN`).
-- `cloudflared` must be installed for local image posting.
+- `cloudflared` must be installed for local image/video posting.
 - If the user specifies a `.env` file path, append `--env <path>` to every command.
   - Example: `node scripts/get-profile.js --env /home/user/.instagram-env`
 - All scripts must be run with this project root as the working directory.
@@ -72,6 +72,31 @@ node scripts/post-image.js --caption "Caption" ./img1.png ./img2.png ./img3.jpg
 - Both URLs (`http://`, `https://`) and local file paths are supported, but mixing is not allowed.
 - Supported local file formats: jpg, jpeg, png, gif, webp, heic/heif (HEIC is automatically converted to JPEG).
 
+### Publish Video (Reels)
+
+```bash
+# Single video (URL)
+node scripts/post-video.js --caption "Caption" https://example.com/video.mp4
+
+# Single video (local file)
+node scripts/post-video.js --caption "Caption" ./videos/clip.mp4
+
+# With cover image and options
+node scripts/post-video.js --caption "Caption" --cover https://example.com/cover.jpg --thumb-offset 5000 --share-to-feed true https://example.com/video.mp4
+
+# Video carousel — multiple videos (URL)
+node scripts/post-video.js --caption "Caption" https://example.com/a.mp4 https://example.com/b.mp4
+
+# Video carousel — multiple videos (local files)
+node scripts/post-video.js --caption "Caption" ./clip1.mp4 ./clip2.mov
+```
+
+- 1 video → Reels post, 2+ videos → automatically posted as carousel (max 10).
+- Both URLs and local file paths are supported, but mixing is not allowed.
+- Supported formats: mp4, mov (max 100MB per file).
+- `--cover`, `--thumb-offset`, `--share-to-feed` options are only available for single video posts (not carousels).
+- Video processing takes longer than images; the script waits up to 10 minutes.
+
 ### View Comments
 
 ```bash
@@ -94,8 +119,9 @@ node scripts/reply-comment.js <comment-id> --text "Reply text"
 
 ## Workflow Guidelines
 
-- When publishing images, always confirm the caption with the user before executing.
+- When publishing images or videos, always confirm the caption with the user before executing.
 - After publishing, use `get-post.js` to retrieve the permalink and report both the result ID and permalink to the user.
+- Video processing takes longer than images. Inform the user that it may take a few minutes.
 - When writing comments/replies, confirm the content with the user before executing.
 - All command outputs are in JSON format.
 

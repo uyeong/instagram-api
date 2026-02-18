@@ -259,6 +259,15 @@ const MIME_TYPES = {
 
 const HEIC_EXTENSIONS = new Set([".heic", ".heif"]);
 
+const VIDEO_MIME_TYPES = {
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+};
+
+const VIDEO_MAX_SIZE = 100 * 1024 * 1024; // 100MB
+
+const VIDEO_CONTAINER_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -295,6 +304,30 @@ async function validateImageFile(filePath) {
     );
   }
   return { absolutePath, mimeType, converted: false };
+}
+
+function validateVideoFile(filePath) {
+  const absolutePath = path.resolve(filePath);
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`File not found: ${absolutePath}`);
+  }
+
+  const ext = path.extname(absolutePath).toLowerCase();
+  const mimeType = VIDEO_MIME_TYPES[ext];
+  if (!mimeType) {
+    throw new Error(
+      `Unsupported video format: ${ext} (supported: mp4, mov)`
+    );
+  }
+
+  const stat = fs.statSync(absolutePath);
+  if (stat.size > VIDEO_MAX_SIZE) {
+    throw new Error(
+      `Video file too large: ${(stat.size / 1024 / 1024).toFixed(1)}MB (max 100MB)`
+    );
+  }
+
+  return { absolutePath, mimeType };
 }
 
 function createFileServer(fileMap) {
@@ -381,7 +414,7 @@ async function postLocalImage(filePath, caption) {
   try {
     const tunnel = await startLocalTunnel(fileMap);
     server = tunnel.server;
-    return await postImage(`${tunnel.publicUrl}/${fileName}`, caption);
+    return await postImage(`${tunnel.publicUrl}/${encodeURIComponent(fileName)}`, caption);
   } finally {
     stopTunnel();
     if (server) server.close();
@@ -442,8 +475,141 @@ async function postLocalCarousel(filePaths, caption) {
   try {
     const tunnel = await startLocalTunnel(fileMap);
     server = tunnel.server;
-    const imageUrls = fileNames.map((f) => `${tunnel.publicUrl}/${f}`);
+    const imageUrls = fileNames.map((f) => `${tunnel.publicUrl}/${encodeURIComponent(f)}`);
     return await postCarousel(imageUrls, caption);
+  } finally {
+    stopTunnel();
+    if (server) server.close();
+    log("Server and tunnel stopped");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Media: post video (Reels)
+// ---------------------------------------------------------------------------
+async function postVideo(videoUrl, caption, options = {}) {
+  const userId = await getMyUserId();
+
+  const body = {
+    media_type: "REELS",
+    video_url: videoUrl,
+    caption,
+  };
+  if (options.coverUrl) body.cover_url = options.coverUrl;
+  if (options.thumbOffset != null) body.thumb_offset = options.thumbOffset;
+  if (options.shareToFeed != null) body.share_to_feed = options.shareToFeed;
+
+  log("Creating video container...");
+  const container = await apiPost(`/${userId}/media`, body);
+  log(`Container created: ${container.id}`);
+
+  log("Waiting for video processing...");
+  await waitForContainer(container.id, VIDEO_CONTAINER_TIMEOUT);
+
+  log("Publishing...");
+  const result = await apiPost(`/${userId}/media_publish`, {
+    creation_id: container.id,
+  });
+  const detail = await apiGet(`/${result.id}`, { fields: "permalink" });
+  log(`Published! ID: ${result.id}`);
+  return { id: result.id, permalink: detail.permalink };
+}
+
+async function postLocalVideo(filePath, caption, options = {}) {
+  const { absolutePath, mimeType } = validateVideoFile(filePath);
+  const fileName = path.basename(absolutePath);
+  const fileMap = new Map([
+    [fileName, { data: fs.readFileSync(absolutePath), mimeType }],
+  ]);
+
+  // Serve local cover image if provided
+  if (options.coverUrl && !options.coverUrl.startsWith("http")) {
+    const cover = await validateImageFile(options.coverUrl);
+    const coverName = path.basename(cover.absolutePath);
+    fileMap.set(coverName, {
+      data: fs.readFileSync(cover.absolutePath),
+      mimeType: cover.mimeType,
+    });
+    options._coverFileName = coverName;
+  }
+
+  let server = null;
+  try {
+    const tunnel = await startLocalTunnel(fileMap);
+    server = tunnel.server;
+    const tunnelOptions = { ...options };
+    if (options._coverFileName) {
+      tunnelOptions.coverUrl = `${tunnel.publicUrl}/${encodeURIComponent(options._coverFileName)}`;
+      delete tunnelOptions._coverFileName;
+    }
+    return await postVideo(
+      `${tunnel.publicUrl}/${encodeURIComponent(fileName)}`,
+      caption,
+      tunnelOptions
+    );
+  } finally {
+    stopTunnel();
+    if (server) server.close();
+    log("Server and tunnel stopped");
+  }
+}
+
+async function postVideoCarousel(videoUrls, caption) {
+  const userId = await getMyUserId();
+
+  const childIds = [];
+  for (let i = 0; i < videoUrls.length; i++) {
+    log(`Creating container for video ${i + 1}/${videoUrls.length}...`);
+    const container = await apiPost(`/${userId}/media`, {
+      media_type: "VIDEO",
+      video_url: videoUrls[i],
+      is_carousel_item: true,
+    });
+    childIds.push(container.id);
+    log(`  Container created: ${container.id}`);
+  }
+
+  log("Waiting for video processing...");
+  for (const id of childIds) {
+    await waitForContainer(id, VIDEO_CONTAINER_TIMEOUT);
+  }
+
+  log("Creating carousel container...");
+  const carousel = await apiPost(`/${userId}/media`, {
+    media_type: "CAROUSEL",
+    children: childIds.join(","),
+    caption,
+  });
+  log(`Carousel container: ${carousel.id}`);
+
+  await waitForContainer(carousel.id);
+
+  log("Publishing carousel...");
+  const result = await apiPost(`/${userId}/media_publish`, {
+    creation_id: carousel.id,
+  });
+  const detail = await apiGet(`/${result.id}`, { fields: "permalink" });
+  log(`Published! ID: ${result.id}`);
+  return { id: result.id, permalink: detail.permalink };
+}
+
+async function postLocalVideoCarousel(filePaths, caption) {
+  const fileMap = new Map();
+  const fileNames = [];
+
+  for (const fp of filePaths) {
+    const { absolutePath, mimeType } = validateVideoFile(fp);
+    const fileName = path.basename(absolutePath);
+    fileMap.set(fileName, { data: fs.readFileSync(absolutePath), mimeType });
+    fileNames.push(fileName);
+  }
+
+  let server = null;
+  try {
+    const tunnel = await startLocalTunnel(fileMap);
+    server = tunnel.server;
+    const videoUrls = fileNames.map((f) => `${tunnel.publicUrl}/${encodeURIComponent(f)}`);
+    return await postVideoCarousel(videoUrls, caption);
   } finally {
     stopTunnel();
     if (server) server.close();
@@ -491,5 +657,11 @@ module.exports = {
   postLocalImage,
   postCarousel,
   postLocalCarousel,
+  validateVideoFile,
+  postVideo,
+  postLocalVideo,
+  postVideoCarousel,
+  postLocalVideoCarousel,
+  VIDEO_CONTAINER_TIMEOUT,
   run,
 };

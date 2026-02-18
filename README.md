@@ -8,6 +8,7 @@ Agents execute individual scripts under `scripts/` and interpret JSON results �
 
 - View profile and posts
 - Publish single images or carousels (up to 10)
+- Publish videos as Reels or video carousels (up to 10)
 - Post from URLs or local files (via cloudflared tunnel)
 - HEIC/HEIF auto-conversion to JPEG
 - Read, write, and reply to comments
@@ -48,7 +49,7 @@ To obtain these credentials:
      &access_token=<SHORT_LIVED_TOKEN>
    ```
 
-### 3. Install cloudflared (for local image posting)
+### 3. Install cloudflared (for local image/video posting)
 
 ```bash
 # macOS
@@ -86,6 +87,7 @@ All scripts support `--env <path>` to use a custom `.env` file.
 | `node scripts/get-posts.js [--limit N]` | List posts |
 | `node scripts/get-post.js <media-id>` | View post detail |
 | `node scripts/post-image.js --caption "..." <images>` | Publish image(s) |
+| `node scripts/post-video.js --caption "..." <videos>` | Publish video(s) / Reels |
 | `node scripts/get-comments.js <media-id>` | View comments |
 | `node scripts/post-comment.js <media-id> --text "..."` | Post comment |
 | `node scripts/reply-comment.js <comment-id> --text "..."` | Reply to comment |
@@ -104,10 +106,27 @@ node scripts/post-image.js --caption "Hello" ./photo.png
 node scripts/post-image.js --caption "Hello" ./a.png ./b.jpg ./c.heic
 ```
 
+### Video publishing examples
+
+```bash
+# Single video from URL (Reels)
+node scripts/post-video.js --caption "Hello" https://example.com/video.mp4
+
+# Single local video with cover image
+node scripts/post-video.js --caption "Hello" --cover ./cover.jpg ./clip.mp4
+
+# Video carousel from local files
+node scripts/post-video.js --caption "Hello" ./a.mp4 ./b.mov
+```
+
+### Note on local video posting
+
+Local file posting uses a cloudflared Quick Tunnel to temporarily expose files so that Instagram's servers can download them. This works well for images and small videos, but large video files (30MB+) may experience instability — Quick Tunnels have no uptime SLA, and slow transfer speeds can cause Instagram to timeout during the download. For reliable large video posting, consider uploading the video to a public URL first and passing the URL directly.
+
 ## Requirements
 
 - Node.js v18+
-- `cloudflared` — for local image posting only
+- `cloudflared` — for local image/video posting only
 - Instagram Graph API credentials (long-lived access token)
 
 ## Project Structure
@@ -124,6 +143,7 @@ instagram-api/
 │   ├── get-posts.js
 │   ├── get-post.js
 │   ├── post-image.js
+│   ├── post-video.js
 │   ├── get-comments.js
 │   ├── post-comment.js
 │   ├── reply-comment.js
@@ -144,6 +164,7 @@ Instagram 계정을 관리하는 [Agent Skills](https://agentskills.io) 스킬. 
 
 - 프로필 및 게시물 조회
 - 단일 이미지 또는 캐러셀 게시 (최대 10장)
+- 비디오(Reels) 또는 비디오 캐러셀 게시 (최대 10개)
 - URL 또는 로컬 파일로 게시 (cloudflared 터널 사용)
 - HEIC/HEIF 이미지 자동 JPEG 변환
 - 댓글 조회, 작성, 답글
@@ -189,7 +210,7 @@ INSTAGRAM_APP_SECRET=<앱-시크릿>
 INSTAGRAM_ACCESS_TOKEN=<장기-액세스-토큰>
 ```
 
-### 3. cloudflared 설치 (로컬 이미지 게시 시 필요)
+### 3. cloudflared 설치 (로컬 이미지/비디오 게시 시 필요)
 
 ```bash
 # macOS
@@ -227,6 +248,7 @@ ln -s "$(pwd)" ~/.agents/skills/instagram-api
 | `node scripts/get-posts.js [--limit N]` | 게시물 목록 조회 |
 | `node scripts/get-post.js <media-id>` | 게시물 상세 조회 |
 | `node scripts/post-image.js --caption "..." <이미지>` | 이미지 게시 |
+| `node scripts/post-video.js --caption "..." <비디오>` | 비디오(Reels) 게시 |
 | `node scripts/get-comments.js <media-id>` | 댓글 조회 |
 | `node scripts/post-comment.js <media-id> --text "..."` | 댓글 작성 |
 | `node scripts/reply-comment.js <comment-id> --text "..."` | 답글 작성 |
@@ -245,8 +267,25 @@ node scripts/post-image.js --caption "안녕" ./photo.png
 node scripts/post-image.js --caption "안녕" ./a.png ./b.jpg ./c.heic
 ```
 
+### 비디오 게시 예시
+
+```bash
+# URL 단일 비디오 (Reels)
+node scripts/post-video.js --caption "안녕" https://example.com/video.mp4
+
+# 로컬 단일 비디오 (커버 이미지 포함)
+node scripts/post-video.js --caption "안녕" --cover ./cover.jpg ./clip.mp4
+
+# 로컬 비디오 캐러셀 (여러 개)
+node scripts/post-video.js --caption "안녕" ./a.mp4 ./b.mov
+```
+
+### 로컬 비디오 게시 시 참고사항
+
+로컬 파일 게시는 cloudflared Quick Tunnel을 사용하여 파일을 임시로 노출하고, Instagram 서버가 이를 다운로드하는 방식이다. 이미지나 작은 비디오에는 문제없이 동작하지만, 대용량 비디오(30MB 이상)의 경우 Quick Tunnel의 불안정성(SLA 없음)과 느린 전송 속도로 인해 Instagram 측 다운로드 타임아웃이 발생할 수 있다. 대용량 비디오를 안정적으로 게시하려면 먼저 공개 URL에 업로드한 뒤 URL을 직접 전달하는 것을 권장한다.
+
 ## 요구사항
 
 - Node.js v18+
-- `cloudflared` — 로컬 이미지 게시 시에만 필요
+- `cloudflared` — 로컬 이미지/비디오 게시 시에만 필요
 - Instagram Graph API 자격 증명 (장기 액세스 토큰)
