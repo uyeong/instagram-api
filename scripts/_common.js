@@ -328,7 +328,8 @@ async function startLocalTunnel(fileMap) {
   return { server, publicUrl };
 }
 
-async function waitForContainer(containerId) {
+async function waitForContainer(containerId, timeoutMs = 5 * 60 * 1000) {
+  const deadline = Date.now() + timeoutMs;
   while (true) {
     const status = await apiGet(`/${containerId}`, {
       fields: "status_code",
@@ -336,6 +337,9 @@ async function waitForContainer(containerId) {
     if (status.status_code === "FINISHED") return;
     if (status.status_code === "ERROR") {
       throw new Error(`Media container processing failed: ${containerId}`);
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`Media container processing timed out after ${timeoutMs / 1000}s: ${containerId}`);
     }
     await sleep(3000);
   }
@@ -361,8 +365,9 @@ async function postImage(imageUrl, caption) {
   const result = await apiPost(`/${userId}/media_publish`, {
     creation_id: container.id,
   });
+  const detail = await apiGet(`/${result.id}`, { fields: "permalink" });
   log(`Published! ID: ${result.id}`);
-  return result;
+  return { id: result.id, permalink: detail.permalink };
 }
 
 async function postLocalImage(filePath, caption) {
