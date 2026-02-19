@@ -2,6 +2,9 @@
 name: instagram-api
 description: Manage an Instagram account. View profile, list posts, publish images/carousels, publish videos/Reels, and read/write comments. Use when the user requests any Instagram-related task.
 allowed-tools: Bash(node scripts/*)
+compatibility: Requires node (v22+), npm, and cloudflared (for local file uploads). Requires env vars INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_ACCESS_TOKEN in a .env file. Requires internet access to graph.instagram.com.
+metadata:
+  version: "1.0"
 ---
 
 # Instagram API Skill
