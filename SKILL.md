@@ -21,6 +21,25 @@ A skill for managing an Instagram account via the Instagram Graph API. Supports 
   - Example: `node scripts/get-profile.js --env /home/user/.instagram-env`
 - All scripts must be run with this project root as the working directory.
 
+## Permission Baseline (Master Confirmed)
+
+Use this exact baseline when diagnosing auth/permission issues.
+
+### Instagram permissions (3)
+- `instagram_business_basic`
+- `instagram_manage_comments`
+- `instagram_business_manage_messages`
+
+### Facebook Page / Business permissions (8)
+- `pages_show_list`
+- `business_management`
+- `instagram_basic`
+- `instagram_manage_comments`
+- `instagram_manage_insights`
+- `instagram_content_publish`
+- `pages_read_engagement`
+- `instagram_manage_contents`
+
 ## Token Strategy (IMPORTANT)
 
 Use **two-token strategy** for reliability:
