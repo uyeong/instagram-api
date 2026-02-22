@@ -65,10 +65,14 @@ All commands automatically refresh the token before execution. No manual refresh
 ### Refresh Token
 
 ```bash
+# Instagram token refresh
 node scripts/refresh-token.js
+
+# Facebook user token refresh (for comments/replies flow)
+node scripts/refresh-facebook-token.js
 ```
 
-Manually refreshes the token and returns expiration info.
+Manually refreshes token(s) and returns expiration info.
 
 ### View Profile
 

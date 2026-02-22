@@ -167,6 +167,57 @@ async function refreshToken() {
   return { access_token: newToken, expires_in: data.expires_in, expires_in_days: expiresInDays };
 }
 
+async function refreshFacebookUserToken() {
+  const config = getConfig();
+  const current = process.env.FACEBOOK_USER_ACCESS_TOKEN;
+
+  if (!current) {
+    throw new Error("FACEBOOK_USER_ACCESS_TOKEN is missing in env");
+  }
+  if (!config.appId || !config.appSecret) {
+    throw new Error("INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET are required for Facebook token exchange");
+  }
+
+  const url = `https://graph.facebook.com/v24.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(config.appId)}&client_secret=${encodeURIComponent(config.appSecret)}&fb_exchange_token=${encodeURIComponent(current)}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (data.error) {
+    throw new Error(`Facebook token refresh failed: ${data.error.message}`);
+  }
+
+  const newToken = data.access_token;
+  const expiresInDays = data.expires_in
+    ? Math.floor(Number(data.expires_in) / 86400)
+    : null;
+
+  process.env.FACEBOOK_USER_ACCESS_TOKEN = newToken;
+
+  let envContent = fs.readFileSync(envPath, "utf-8");
+  if (/^FACEBOOK_USER_ACCESS_TOKEN=.*/m.test(envContent)) {
+    envContent = envContent.replace(
+      /^FACEBOOK_USER_ACCESS_TOKEN=.*/m,
+      `FACEBOOK_USER_ACCESS_TOKEN=${newToken}`
+    );
+  } else {
+    envContent = envContent.trimEnd() + `\nFACEBOOK_USER_ACCESS_TOKEN=${newToken}\n`;
+  }
+  fs.writeFileSync(envPath, envContent);
+
+  if (expiresInDays != null) {
+    log(`Facebook user token refreshed (expires in ${expiresInDays} days)`);
+  } else {
+    log("Facebook user token refreshed");
+  }
+
+  return {
+    access_token: newToken,
+    expires_in: data.expires_in,
+    expires_in_days: expiresInDays,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Profile
 // ---------------------------------------------------------------------------
@@ -744,6 +795,7 @@ module.exports = {
   apiGet,
   apiPost,
   refreshToken,
+  refreshFacebookUserToken,
   getProfile,
   getMyPosts,
   getPost,
