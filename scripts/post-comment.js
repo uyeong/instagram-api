@@ -7,4 +7,4 @@ run(({ named, positional }) => {
     throw new Error('Usage: post-comment.js <media-id> --text "comment"');
   }
   return postComment(mediaId, text);
-});
+}, { refreshIg: true, refreshFb: true });

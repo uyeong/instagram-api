@@ -770,11 +770,27 @@ async function postLocalVideoCarousel(filePaths, caption) {
 // ---------------------------------------------------------------------------
 // run() — script entrypoint wrapper
 // ---------------------------------------------------------------------------
-async function run(fn) {
+async function run(fn, options = {}) {
   try {
     const { named, positional } = parseArgs();
     loadEnv(named.env);
-    await refreshToken();
+
+    const refreshIg = options.refreshIg !== false;
+    const refreshFb = options.refreshFb === true;
+
+    if (refreshIg) {
+      await refreshToken();
+    }
+
+    if (refreshFb && process.env.FACEBOOK_USER_ACCESS_TOKEN) {
+      try {
+        await refreshFacebookUserToken();
+      } catch (err) {
+        // Keep running with existing token if refresh endpoint fails temporarily.
+        log(`Facebook token refresh skipped: ${err.message}`);
+      }
+    }
+
     const result = await fn({ named, positional });
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     process.exit(0);

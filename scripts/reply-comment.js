@@ -7,4 +7,4 @@ run(({ named, positional }) => {
     throw new Error('Usage: reply-comment.js <comment-id> --text "reply"');
   }
   return replyToComment(commentId, text);
-});
+}, { refreshIg: true, refreshFb: true });
