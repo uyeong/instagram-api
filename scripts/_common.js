@@ -149,9 +149,62 @@ async function getPost(mediaId) {
 // Comments
 // ---------------------------------------------------------------------------
 async function getComments(mediaId) {
-  return apiGet(`/${mediaId}/comments`, {
-    fields: "id,text,username,timestamp,replies{id,text,username,timestamp}",
+  const commentFields = "id,text,username,timestamp,replies{id,text,username,timestamp}";
+
+  // 1) Primary comments on the target media
+  const primary = await apiGet(`/${mediaId}/comments`, {
+    fields: commentFields,
   });
+
+  // 2) For carousel posts, comments can live on child media items.
+  //    If primary is empty, collect child comments as a fallback.
+  if (Array.isArray(primary?.data) && primary.data.length > 0) {
+    return primary;
+  }
+
+  let mediaInfo;
+  try {
+    mediaInfo = await apiGet(`/${mediaId}`, {
+      fields: "id,media_type,children{id}",
+    });
+  } catch {
+    return primary;
+  }
+
+  if (mediaInfo?.media_type !== "CAROUSEL_ALBUM" || !Array.isArray(mediaInfo?.children?.data)) {
+    return primary;
+  }
+
+  const childResults = [];
+
+  for (const child of mediaInfo.children.data) {
+    if (!child?.id) continue;
+    try {
+      const childComments = await apiGet(`/${child.id}/comments`, {
+        fields: commentFields,
+      });
+      if (Array.isArray(childComments?.data) && childComments.data.length > 0) {
+        childResults.push({
+          media_id: child.id,
+          comments: childComments.data,
+        });
+      }
+    } catch {
+      // Ignore child-level fetch failures and continue
+    }
+  }
+
+  if (childResults.length === 0) return primary;
+
+  return {
+    data: childResults.flatMap((entry) =>
+      entry.comments.map((comment) => ({ ...comment, media_id: entry.media_id }))
+    ),
+    meta: {
+      source: "carousel-children",
+      children_with_comments: childResults.map((c) => c.media_id),
+    },
+  };
 }
 
 async function postComment(mediaId, text) {
