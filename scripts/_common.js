@@ -47,8 +47,8 @@ function loadEnv(customPath) {
 // ---------------------------------------------------------------------------
 function getConfig() {
   return {
-    appId: process.env.INSTAGRAM_APP_ID,
-    appSecret: process.env.INSTAGRAM_APP_SECRET,
+    appId: process.env.FACEBOOK_APP_ID || process.env.INSTAGRAM_APP_ID,
+    appSecret: process.env.FACEBOOK_APP_SECRET || process.env.INSTAGRAM_APP_SECRET,
     accessToken: process.env.INSTAGRAM_ACCESS_TOKEN,
     baseUrl: "https://graph.instagram.com/v24.0",
     commentsAccessToken:

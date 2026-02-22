@@ -16,6 +16,7 @@ A skill for managing an Instagram account via the Instagram Graph API. Supports 
 - A `.env` file with credentials must be configured.
   - Required: `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_ACCESS_TOKEN`
   - Recommended (for comment/reply via Facebook Graph): `FACEBOOK_USER_ACCESS_TOKEN`
+  - Optional override for FB token refresh exchange: `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`
 - `cloudflared` must be installed for local image/video posting.
 - If the user specifies a `.env` file path, append `--env <path>` to every command.
   - Example: `node scripts/get-profile.js --env /home/user/.instagram-env`
