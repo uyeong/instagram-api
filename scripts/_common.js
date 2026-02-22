@@ -51,6 +51,13 @@ function getConfig() {
     appSecret: process.env.INSTAGRAM_APP_SECRET,
     accessToken: process.env.INSTAGRAM_ACCESS_TOKEN,
     baseUrl: "https://graph.instagram.com/v24.0",
+    commentsAccessToken:
+      process.env.INSTAGRAM_COMMENTS_ACCESS_TOKEN ||
+      process.env.FACEBOOK_USER_ACCESS_TOKEN ||
+      process.env.INSTAGRAM_ACCESS_TOKEN,
+    commentsBaseUrl:
+      process.env.INSTAGRAM_COMMENTS_BASE_URL ||
+      "https://graph.facebook.com/v24.0",
   };
 }
 
@@ -89,11 +96,50 @@ async function apiPost(endpoint, body = {}) {
   return data;
 }
 
+async function commentsApiGet(endpoint, params = {}) {
+  const config = getConfig();
+  params.access_token = config.commentsAccessToken;
+  const query = new URLSearchParams(params).toString();
+  const url = `${config.commentsBaseUrl}${endpoint}?${query}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (data.error) {
+    throw new Error(`Comments API error: ${data.error.message}`);
+  }
+  return data;
+}
+
+async function commentsApiPost(endpoint, body = {}) {
+  const config = getConfig();
+  body.access_token = config.commentsAccessToken;
+
+  const res = await fetch(`${config.commentsBaseUrl}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+
+  if (data.error) {
+    throw new Error(`Comments API error: ${data.error.message}`);
+  }
+  return data;
+}
+
 // ---------------------------------------------------------------------------
 // Token
 // ---------------------------------------------------------------------------
 async function refreshToken() {
   const config = getConfig();
+
+  // Instagram long-lived refresh endpoint only works for IG user tokens (typically IGA...)
+  if (!config.accessToken || !config.accessToken.startsWith("IG")) {
+    log("Skipping token refresh (non-IG token detected)");
+    return { access_token: config.accessToken, skipped: true };
+  }
+
   const url = `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${config.accessToken}`;
 
   const res = await fetch(url);
@@ -152,7 +198,7 @@ async function getComments(mediaId) {
   const commentFields = "id,text,username,timestamp,replies{id,text,username,timestamp}";
 
   // 1) Primary comments on the target media
-  const primary = await apiGet(`/${mediaId}/comments`, {
+  const primary = await commentsApiGet(`/${mediaId}/comments`, {
     fields: commentFields,
   });
 
@@ -180,7 +226,7 @@ async function getComments(mediaId) {
   for (const child of mediaInfo.children.data) {
     if (!child?.id) continue;
     try {
-      const childComments = await apiGet(`/${child.id}/comments`, {
+      const childComments = await commentsApiGet(`/${child.id}/comments`, {
         fields: commentFields,
       });
       if (Array.isArray(childComments?.data) && childComments.data.length > 0) {
@@ -208,11 +254,11 @@ async function getComments(mediaId) {
 }
 
 async function postComment(mediaId, text) {
-  return apiPost(`/${mediaId}/comments`, { message: text });
+  return commentsApiPost(`/${mediaId}/comments`, { message: text });
 }
 
 async function replyToComment(commentId, text) {
-  return apiPost(`/${commentId}/replies`, { message: text });
+  return commentsApiPost(`/${commentId}/replies`, { message: text });
 }
 
 // ---------------------------------------------------------------------------
