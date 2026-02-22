@@ -13,11 +13,31 @@ A skill for managing an Instagram account via the Instagram Graph API. Supports 
 
 ## Prerequisites
 
-- A `.env` file with Instagram credentials must be configured (`INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_ACCESS_TOKEN`).
+- A `.env` file with credentials must be configured.
+  - Required: `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_ACCESS_TOKEN`
+  - Recommended (for comment/reply via Facebook Graph): `FACEBOOK_USER_ACCESS_TOKEN`
 - `cloudflared` must be installed for local image/video posting.
 - If the user specifies a `.env` file path, append `--env <path>` to every command.
   - Example: `node scripts/get-profile.js --env /home/user/.instagram-env`
 - All scripts must be run with this project root as the working directory.
+
+## Token Strategy (IMPORTANT)
+
+Use **two-token strategy** for reliability:
+
+1. **Instagram token (`INSTAGRAM_ACCESS_TOKEN`)**
+   - Use for profile/media lookup and publishing flows (`graph.instagram.com`).
+   - Supports IG long-lived refresh flow.
+
+2. **Facebook user token (`FACEBOOK_USER_ACCESS_TOKEN`)**
+   - Use for comment/reply flows (`graph.facebook.com`) when required.
+   - Typically required for stable `comments`/`replies` behavior on IG business-linked assets.
+
+### Refresh behavior
+
+- IG token refresh is handled by existing refresh flow.
+- FB user token uses a different lifecycle than IG; treat it independently.
+- Keep both tokens in `.env` and update/persist each token according to its own refresh path.
 
 ## Available Commands
 
@@ -126,6 +146,7 @@ node scripts/reply-comment.js <comment-id> --text "Reply text"
 - After publishing, use `get-post.js` to retrieve the permalink and report both the result ID and permalink to the user.
 - Video processing takes longer than images. Inform the user that it may take a few minutes.
 - When writing comments/replies, confirm the content with the user before executing.
+- Prefer IG token path for media/profile/publish operations; use FB user token path for comment/reply operations.
 - All command outputs are in JSON format.
 
 ## Error Handling
