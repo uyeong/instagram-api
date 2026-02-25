@@ -42,6 +42,7 @@ run(async ({ named, positional }) => {
 
   return {
     id: result.id,
+    permalink: result.permalink,
     type: items.length === 1 ? "IMAGE" : "CAROUSEL",
   };
 });

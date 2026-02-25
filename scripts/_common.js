@@ -47,17 +47,16 @@ function loadEnv(customPath) {
 // ---------------------------------------------------------------------------
 function getConfig() {
   return {
-    appId: process.env.FACEBOOK_APP_ID || process.env.INSTAGRAM_APP_ID,
-    appSecret: process.env.FACEBOOK_APP_SECRET || process.env.INSTAGRAM_APP_SECRET,
-    accessToken: process.env.INSTAGRAM_ACCESS_TOKEN,
-    baseUrl: "https://graph.instagram.com/v24.0",
-    commentsAccessToken:
-      process.env.INSTAGRAM_COMMENTS_ACCESS_TOKEN ||
-      process.env.FACEBOOK_USER_ACCESS_TOKEN ||
-      process.env.INSTAGRAM_ACCESS_TOKEN,
-    commentsBaseUrl:
-      process.env.INSTAGRAM_COMMENTS_BASE_URL ||
-      "https://graph.facebook.com/v24.0",
+    ig: {
+      accessToken: process.env.INSTAGRAM_ACCESS_TOKEN,
+      baseUrl: "https://graph.instagram.com/v24.0",
+    },
+    fb: {
+      appId: process.env.FACEBOOK_APP_ID,
+      appSecret: process.env.FACEBOOK_APP_SECRET,
+      accessToken: process.env.FACEBOOK_USER_ACCESS_TOKEN,
+      baseUrl: "https://graph.facebook.com/v24.0",
+    },
   };
 }
 
@@ -65,10 +64,10 @@ function getConfig() {
 // API
 // ---------------------------------------------------------------------------
 async function apiGet(endpoint, params = {}) {
-  const config = getConfig();
-  params.access_token = config.accessToken;
+  const { ig } = getConfig();
+  params.access_token = ig.accessToken;
   const query = new URLSearchParams(params).toString();
-  const url = `${config.baseUrl}${endpoint}?${query}`;
+  const url = `${ig.baseUrl}${endpoint}?${query}`;
 
   const res = await fetch(url);
   const data = await res.json();
@@ -80,10 +79,10 @@ async function apiGet(endpoint, params = {}) {
 }
 
 async function apiPost(endpoint, body = {}) {
-  const config = getConfig();
-  body.access_token = config.accessToken;
+  const { ig } = getConfig();
+  body.access_token = ig.accessToken;
 
-  const res = await fetch(`${config.baseUrl}${endpoint}`, {
+  const res = await fetch(`${ig.baseUrl}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -96,26 +95,32 @@ async function apiPost(endpoint, body = {}) {
   return data;
 }
 
-async function commentsApiGet(endpoint, params = {}) {
-  const config = getConfig();
-  params.access_token = config.commentsAccessToken;
+async function fbApiGet(endpoint, params = {}) {
+  const { fb } = getConfig();
+  if (!fb.accessToken) {
+    throw new Error("FACEBOOK_USER_ACCESS_TOKEN is required for comment operations");
+  }
+  params.access_token = fb.accessToken;
   const query = new URLSearchParams(params).toString();
-  const url = `${config.commentsBaseUrl}${endpoint}?${query}`;
+  const url = `${fb.baseUrl}${endpoint}?${query}`;
 
   const res = await fetch(url);
   const data = await res.json();
 
   if (data.error) {
-    throw new Error(`Comments API error: ${data.error.message}`);
+    throw new Error(`Facebook API error: ${data.error.message}`);
   }
   return data;
 }
 
-async function commentsApiPost(endpoint, body = {}) {
-  const config = getConfig();
-  body.access_token = config.commentsAccessToken;
+async function fbApiPost(endpoint, body = {}) {
+  const { fb } = getConfig();
+  if (!fb.accessToken) {
+    throw new Error("FACEBOOK_USER_ACCESS_TOKEN is required for comment operations");
+  }
+  body.access_token = fb.accessToken;
 
-  const res = await fetch(`${config.commentsBaseUrl}${endpoint}`, {
+  const res = await fetch(`${fb.baseUrl}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -123,7 +128,7 @@ async function commentsApiPost(endpoint, body = {}) {
   const data = await res.json();
 
   if (data.error) {
-    throw new Error(`Comments API error: ${data.error.message}`);
+    throw new Error(`Facebook API error: ${data.error.message}`);
   }
   return data;
 }
@@ -131,16 +136,16 @@ async function commentsApiPost(endpoint, body = {}) {
 // ---------------------------------------------------------------------------
 // Token
 // ---------------------------------------------------------------------------
-async function refreshToken() {
-  const config = getConfig();
+async function refreshIgToken() {
+  const { ig } = getConfig();
 
   // Instagram long-lived refresh endpoint only works for IG user tokens (typically IGA...)
-  if (!config.accessToken || !config.accessToken.startsWith("IG")) {
-    log("Skipping token refresh (non-IG token detected)");
-    return { access_token: config.accessToken, skipped: true };
+  if (!ig.accessToken || !ig.accessToken.startsWith("IG")) {
+    log("Skipping IG token refresh (non-IG token detected)");
+    return { access_token: ig.accessToken, skipped: true };
   }
 
-  const url = `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${config.accessToken}`;
+  const url = `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${ig.accessToken}`;
 
   const res = await fetch(url);
   const data = await res.json();
@@ -163,28 +168,27 @@ async function refreshToken() {
   );
   fs.writeFileSync(envPath, envContent);
 
-  log(`Token refreshed (expires in ${expiresInDays} days)`);
+  log(`IG token refreshed (expires in ${expiresInDays} days)`);
   return { access_token: newToken, expires_in: data.expires_in, expires_in_days: expiresInDays };
 }
 
-async function refreshFacebookUserToken() {
-  const config = getConfig();
-  const current = process.env.FACEBOOK_USER_ACCESS_TOKEN;
+async function refreshFbToken() {
+  const { fb } = getConfig();
 
-  if (!current) {
-    throw new Error("FACEBOOK_USER_ACCESS_TOKEN is missing in env");
+  if (!fb.accessToken) {
+    throw new Error("FACEBOOK_USER_ACCESS_TOKEN is missing");
   }
-  if (!config.appId || !config.appSecret) {
-    throw new Error("INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET are required for Facebook token exchange");
+  if (!fb.appId || !fb.appSecret) {
+    throw new Error("FACEBOOK_APP_ID / FACEBOOK_APP_SECRET are required for FB token refresh");
   }
 
-  const url = `https://graph.facebook.com/v24.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(config.appId)}&client_secret=${encodeURIComponent(config.appSecret)}&fb_exchange_token=${encodeURIComponent(current)}`;
+  const url = `${fb.baseUrl}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(fb.appId)}&client_secret=${encodeURIComponent(fb.appSecret)}&fb_exchange_token=${encodeURIComponent(fb.accessToken)}`;
 
   const res = await fetch(url);
   const data = await res.json();
 
   if (data.error) {
-    throw new Error(`Facebook token refresh failed: ${data.error.message}`);
+    throw new Error(`FB token refresh failed: ${data.error.message}`);
   }
 
   const newToken = data.access_token;
@@ -206,9 +210,9 @@ async function refreshFacebookUserToken() {
   fs.writeFileSync(envPath, envContent);
 
   if (expiresInDays != null) {
-    log(`Facebook user token refreshed (expires in ${expiresInDays} days)`);
+    log(`FB token refreshed (expires in ${expiresInDays} days)`);
   } else {
-    log("Facebook user token refreshed");
+    log("FB token refreshed");
   }
 
   return {
@@ -249,7 +253,7 @@ async function getComments(mediaId) {
   const commentFields = "id,text,username,timestamp,replies{id,text,username,timestamp}";
 
   // 1) Primary comments on the target media
-  const primary = await commentsApiGet(`/${mediaId}/comments`, {
+  const primary = await fbApiGet(`/${mediaId}/comments`, {
     fields: commentFields,
   });
 
@@ -277,7 +281,7 @@ async function getComments(mediaId) {
   for (const child of mediaInfo.children.data) {
     if (!child?.id) continue;
     try {
-      const childComments = await commentsApiGet(`/${child.id}/comments`, {
+      const childComments = await fbApiGet(`/${child.id}/comments`, {
         fields: commentFields,
       });
       if (Array.isArray(childComments?.data) && childComments.data.length > 0) {
@@ -305,11 +309,11 @@ async function getComments(mediaId) {
 }
 
 async function postComment(mediaId, text) {
-  return commentsApiPost(`/${mediaId}/comments`, { message: text });
+  return fbApiPost(`/${mediaId}/comments`, { message: text });
 }
 
 async function replyToComment(commentId, text) {
-  return commentsApiPost(`/${commentId}/replies`, { message: text });
+  return fbApiPost(`/${commentId}/replies`, { message: text });
 }
 
 // ---------------------------------------------------------------------------
@@ -779,15 +783,15 @@ async function run(fn, options = {}) {
     const refreshFb = options.refreshFb === true;
 
     if (refreshIg) {
-      await refreshToken();
+      await refreshIgToken();
     }
 
     if (refreshFb && process.env.FACEBOOK_USER_ACCESS_TOKEN) {
       try {
-        await refreshFacebookUserToken();
+        await refreshFbToken();
       } catch (err) {
         // Keep running with existing token if refresh endpoint fails temporarily.
-        log(`Facebook token refresh skipped: ${err.message}`);
+        log(`FB token refresh skipped: ${err.message}`);
       }
     }
 
@@ -810,8 +814,8 @@ module.exports = {
   getConfig,
   apiGet,
   apiPost,
-  refreshToken,
-  refreshFacebookUserToken,
+  refreshIgToken,
+  refreshFbToken,
   getProfile,
   getMyPosts,
   getPost,

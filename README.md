@@ -31,15 +31,20 @@ cp .env.example .env
 Fill in your `.env`:
 
 ```
-INSTAGRAM_APP_ID=<your-app-id>
-INSTAGRAM_APP_SECRET=<your-app-secret>
 INSTAGRAM_ACCESS_TOKEN=<your-access-token>
+
+# Recommended for comment/reply flows (uses Facebook Graph API)
+FACEBOOK_USER_ACCESS_TOKEN=<your-fb-user-token>
+
+# Required for FB token refresh
+FACEBOOK_APP_ID=<fb-app-id>
+FACEBOOK_APP_SECRET=<fb-app-secret>
 ```
 
 To obtain these credentials:
 
 1. Create a **Meta App** at [developers.facebook.com](https://developers.facebook.com/) and add the **Instagram** product.
-2. In the App Dashboard, find your **App ID** and **App Secret** under App Settings > Basic.
+2. In the App Dashboard, find your **App ID** and **App Secret** under App Settings > Basic (used as `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`).
 3. Generate a **short-lived access token** via the Instagram Graph API Explorer or the Token Generator in the App Dashboard.
 4. Exchange it for a **long-lived access token** (valid for 60 days, auto-refreshed by this skill):
    ```
@@ -91,7 +96,8 @@ All scripts support `--env <path>` to use a custom `.env` file.
 | `node scripts/get-comments.js <media-id>` | View comments |
 | `node scripts/post-comment.js <media-id> --text "..."` | Post comment |
 | `node scripts/reply-comment.js <comment-id> --text "..."` | Reply to comment |
-| `node scripts/refresh-token.js` | Manually refresh token |
+| `node scripts/refresh-token.js` | Manually refresh IG token |
+| `node scripts/refresh-facebook-token.js` | Manually refresh FB user token |
 
 ### Image publishing examples
 
@@ -125,7 +131,7 @@ Local file posting uses a cloudflared Quick Tunnel to temporarily expose files s
 
 ## Requirements
 
-- Node.js v18+
+- Node.js v22+
 - `cloudflared` — for local image/video posting only
 - Instagram Graph API credentials (long-lived access token)
 
@@ -147,7 +153,8 @@ instagram-api/
 │   ├── get-comments.js
 │   ├── post-comment.js
 │   ├── reply-comment.js
-│   └── refresh-token.js
+│   ├── refresh-token.js
+│   └── refresh-facebook-token.js
 ├── .env                  # Credentials (not committed)
 └── package.json
 ```
@@ -205,9 +212,14 @@ cp .env.example .env
 ```
 
 ```
-INSTAGRAM_APP_ID=<앱-ID>
-INSTAGRAM_APP_SECRET=<앱-시크릿>
 INSTAGRAM_ACCESS_TOKEN=<장기-액세스-토큰>
+
+# 댓글/답글 흐름에 권장 (Facebook Graph API 사용)
+FACEBOOK_USER_ACCESS_TOKEN=<FB-사용자-토큰>
+
+# FB 토큰 갱신 시 필수
+FACEBOOK_APP_ID=<FB-앱-ID>
+FACEBOOK_APP_SECRET=<FB-앱-시크릿>
 ```
 
 ### 3. cloudflared 설치 (로컬 이미지/비디오 게시 시 필요)
@@ -252,7 +264,8 @@ ln -s "$(pwd)" ~/.agents/skills/instagram-api
 | `node scripts/get-comments.js <media-id>` | 댓글 조회 |
 | `node scripts/post-comment.js <media-id> --text "..."` | 댓글 작성 |
 | `node scripts/reply-comment.js <comment-id> --text "..."` | 답글 작성 |
-| `node scripts/refresh-token.js` | 수동 토큰 갱신 |
+| `node scripts/refresh-token.js` | IG 수동 토큰 갱신 |
+| `node scripts/refresh-facebook-token.js` | FB 사용자 토큰 수동 갱신 |
 
 ### 이미지 게시 예시
 
@@ -286,6 +299,6 @@ node scripts/post-video.js --caption "안녕" ./a.mp4 ./b.mov
 
 ## 요구사항
 
-- Node.js v18+
+- Node.js v22+
 - `cloudflared` — 로컬 이미지/비디오 게시 시에만 필요
 - Instagram Graph API 자격 증명 (장기 액세스 토큰)

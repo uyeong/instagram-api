@@ -2,7 +2,7 @@
 name: instagram-api
 description: Manage an Instagram account. View profile, list posts, publish images/carousels, publish videos/Reels, and read/write comments. Use when the user requests any Instagram-related task.
 allowed-tools: Bash(node scripts/*)
-compatibility: Requires node (v22+), npm, and cloudflared (for local file uploads). Requires env vars INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_ACCESS_TOKEN in a .env file. Requires internet access to graph.instagram.com.
+compatibility: Requires node (v22+), npm, and cloudflared (for local file uploads). Requires env var INSTAGRAM_ACCESS_TOKEN in a .env file. Requires internet access to graph.instagram.com.
 metadata:
   version: "1.0"
 ---
@@ -14,50 +14,13 @@ A skill for managing an Instagram account via the Instagram Graph API. Supports 
 ## Prerequisites
 
 - A `.env` file with credentials must be configured.
-  - Required: `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_ACCESS_TOKEN`
+  - Required: `INSTAGRAM_ACCESS_TOKEN`
   - Recommended (for comment/reply via Facebook Graph): `FACEBOOK_USER_ACCESS_TOKEN`
-  - Optional override for FB token refresh exchange: `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`
+  - Required for FB token refresh: `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`
 - `cloudflared` must be installed for local image/video posting.
 - If the user specifies a `.env` file path, append `--env <path>` to every command.
   - Example: `node scripts/get-profile.js --env /home/user/.instagram-env`
 - All scripts must be run with this project root as the working directory.
-
-## Permission Baseline (Master Confirmed)
-
-Use this exact baseline when diagnosing auth/permission issues.
-
-### Instagram permissions (3)
-- `instagram_business_basic`
-- `instagram_manage_comments`
-- `instagram_business_manage_messages`
-
-### Facebook Page / Business permissions (8)
-- `pages_show_list`
-- `business_management`
-- `instagram_basic`
-- `instagram_manage_comments`
-- `instagram_manage_insights`
-- `instagram_content_publish`
-- `pages_read_engagement`
-- `instagram_manage_contents`
-
-## Token Strategy (IMPORTANT)
-
-Use **two-token strategy** for reliability:
-
-1. **Instagram token (`INSTAGRAM_ACCESS_TOKEN`)**
-   - Use for profile/media lookup and publishing flows (`graph.instagram.com`).
-   - Supports IG long-lived refresh flow.
-
-2. **Facebook user token (`FACEBOOK_USER_ACCESS_TOKEN`)**
-   - Use for comment/reply flows (`graph.facebook.com`) when required.
-   - Typically required for stable `comments`/`replies` behavior on IG business-linked assets.
-
-### Refresh behavior
-
-- IG token refresh is handled by existing refresh flow.
-- FB user token uses a different lifecycle than IG; treat it independently.
-- Keep both tokens in `.env` and update/persist each token according to its own refresh path.
 
 ## Available Commands
 
@@ -167,10 +130,9 @@ node scripts/reply-comment.js <comment-id> --text "Reply text"
 ## Workflow Guidelines
 
 - When publishing images or videos, always confirm the caption with the user before executing.
-- After publishing, use `get-post.js` to retrieve the permalink and report both the result ID and permalink to the user.
+- After publishing, report the result ID and permalink to the user (both are included in the output).
 - Video processing takes longer than images. Inform the user that it may take a few minutes.
 - When writing comments/replies, confirm the content with the user before executing.
-- Prefer IG token path for media/profile/publish operations; use FB user token path for comment/reply operations.
 - All command outputs are in JSON format.
 
 ## Error Handling

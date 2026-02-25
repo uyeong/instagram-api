@@ -8,12 +8,12 @@ Implement the Instagram Graph API as a **skill that Claude Code / OpenAI Codex a
 
 Follows the [Agent Skills](https://agentskills.io) open standard. Both Claude Code and OpenAI Codex support this standard, so a single skill directory works on both platforms.
 
-The project root itself is the skill directory. Symlink this project into `.claude/skills/instagram/` or `.agents/skills/instagram/` and `SKILL.md` at the root becomes the entrypoint.
+The project root itself is the skill directory. Symlink this project into `.claude/skills/instagram-api/` or `.agents/skills/instagram-api/` and `SKILL.md` at the root becomes the entrypoint.
 
 | Platform | Installation | Notes |
 |----------|-------------|-------|
-| Claude Code | `ln -s <project-root> ~/.claude/skills/instagram` | Tool access controlled via `allowed-tools` |
-| OpenAI Codex | `ln -s <project-root> ~/.agents/skills/instagram` | Additional config in `agents/openai.yaml` |
+| Claude Code | `ln -s <project-root> ~/.claude/skills/instagram-api` | Tool access controlled via `allowed-tools` |
+| OpenAI Codex | `ln -s <project-root> ~/.agents/skills/instagram-api` | Additional config in `agents/openai.yaml` |
 
 ---
 
@@ -28,6 +28,7 @@ instagram-api/
 ├── scripts/
 │   ├── _common.js                # Shared module
 │   ├── refresh-token.js
+│   ├── refresh-facebook-token.js
 │   ├── get-profile.js
 │   ├── get-posts.js
 │   ├── get-post.js
@@ -46,7 +47,7 @@ instagram-api/
 
 ### Common Principles
 
-1. **Every script refreshes the token before execution** (internally calls `refreshToken()`).
+1. **Every script refreshes the token before execution** (internally calls `refreshIgToken()` via `run()`). Exception: `refresh-token.js` and `refresh-facebook-token.js` call their respective refresh functions directly to avoid double-refresh.
 2. **stdout outputs JSON only**. Human-readable logs go to stderr.
 3. **Exit codes**: success `0`, failure `1`.
 4. **Error format on stdout**:
@@ -64,31 +65,35 @@ instagram-api/
 
 | Function / Constant | Description |
 |---------------------|-------------|
-| `config` | appId, appSecret, accessToken, baseUrl (Instagram Graph API v24.0) |
-| `apiGet(endpoint, params)` | GET request. Automatically appends access_token |
-| `apiPost(endpoint, body)` | POST request. Automatically appends access_token |
-| `refreshToken()` | Refresh token + save to `.env` file |
+| `log(msg)` | Write message to stderr (stdout is reserved for JSON) |
+| `getConfig()` | Returns `{ ig, fb }`. `ig`: `{ accessToken, baseUrl }` from `INSTAGRAM_ACCESS_TOKEN` (`baseUrl` = `graph.instagram.com/v24.0`). `fb`: `{ appId, appSecret, accessToken, baseUrl }` from `FACEBOOK_*` env vars (`baseUrl` = `graph.facebook.com/v24.0`) |
+| `apiGet(endpoint, params)` | GET request to Instagram Graph API (`ig.baseUrl`). Automatically appends `ig.accessToken` |
+| `apiPost(endpoint, body)` | POST request to Instagram Graph API. Automatically appends `ig.accessToken` |
+| `fbApiGet(endpoint, params)` | GET request to Facebook Graph API (`fb.baseUrl`). Uses `fb.accessToken`. Throws if `FACEBOOK_USER_ACCESS_TOKEN` is missing |
+| `fbApiPost(endpoint, body)` | POST request to Facebook Graph API. Uses `fb.accessToken`. Throws if `FACEBOOK_USER_ACCESS_TOKEN` is missing |
+| `refreshIgToken()` | Refresh Instagram long-lived token + save to `.env` file. Skips if token doesn't start with "IG" |
+| `refreshFbToken()` | Refresh Facebook user token via `fb_exchange_token` grant + save to `.env` file |
 | `getProfile()` | Fetch profile (id, username, name, account_type, media_count) |
 | `getMyPosts(limit)` | Fetch post list (id, caption, media_type, timestamp, permalink) |
 | `getPost(mediaId)` | Fetch post detail (includes like_count, comments_count) |
-| `postImage(url, caption)` | Post URL image (create container → poll → publish) |
-| `postLocalImage(path, caption)` | Post local image (HTTP server + cloudflared tunnel) |
-| `postCarousel(urls, caption)` | Post URL carousel (child containers → carousel container → publish) |
-| `postLocalCarousel(paths, caption)` | Post local carousel |
+| `postImage(url, caption)` | Post URL image (create container → poll → publish). Returns `{ id, permalink }` |
+| `postLocalImage(path, caption)` | Post local image (HTTP server + cloudflared tunnel). Returns `{ id, permalink }` |
+| `postCarousel(urls, caption)` | Post URL carousel (child containers → carousel container → publish). Returns `{ id, permalink }` |
+| `postLocalCarousel(paths, caption)` | Post local carousel. Returns `{ id, permalink }` |
 | `validateVideoFile(filePath)` | Validate video file (existence, format, size). Returns `{ absolutePath, mimeType }` |
-| `postVideo(url, caption, options?)` | Post URL video as Reels. options: `coverUrl`, `thumbOffset`, `shareToFeed` |
-| `postLocalVideo(path, caption, options?)` | Post local video as Reels (HTTP server + cloudflared tunnel). Also serves local cover image |
-| `postVideoCarousel(urls, caption)` | Post URL video carousel |
-| `postLocalVideoCarousel(paths, caption)` | Post local video carousel |
+| `postVideo(url, caption, options?)` | Post URL video as Reels. options: `coverUrl`, `thumbOffset`, `shareToFeed`. Returns `{ id, permalink }` |
+| `postLocalVideo(path, caption, options?)` | Post local video as Reels (HTTP server + cloudflared tunnel). Also serves local cover image. Returns `{ id, permalink }` |
+| `postVideoCarousel(urls, caption)` | Post URL video carousel. Returns `{ id, permalink }` |
+| `postLocalVideoCarousel(paths, caption)` | Post local video carousel. Returns `{ id, permalink }` |
 | `VIDEO_CONTAINER_TIMEOUT` | 10 minute timeout for video container processing |
-| `getComments(mediaId)` | Fetch comments + replies |
-| `postComment(mediaId, text)` | Create comment |
-| `replyToComment(commentId, text)` | Create reply |
+| `getComments(mediaId)` | Fetch comments + replies. For carousel posts, automatically falls back to child media comments if the parent has none |
+| `postComment(mediaId, text)` | Create comment (uses Facebook Graph API via `fbApiPost`) |
+| `replyToComment(commentId, text)` | Create reply (uses Facebook Graph API via `fbApiPost`) |
 | `startTunnel(port)` | Start cloudflared quick tunnel. Returns public URL |
 | `stopTunnel()` | Kill tunnel process |
-| `run(fn)` | Script entrypoint wrapper: parse args → load env → refresh token → execute fn → JSON output / error handling |
+| `run(fn, options?)` | Script entrypoint wrapper: parse args → load env → refresh token(s) → execute fn → JSON output / error handling. `options.refreshIg` (default `true`): call `refreshIgToken()`. `options.refreshFb` (default `false`): call `refreshFbToken()` (fails silently) |
 | `parseArgs()` | Command-line args parser. Returns `{ named, positional }` |
-| `loadEnv(envPath?)` | Load specified or default `.env`. Also sets the file path for `refreshToken()` to write to |
+| `loadEnv(envPath?)` | Load specified or default `.env`. Also sets the file path for `refreshIgToken()` to write to |
 
 ### Script Specifications
 
@@ -102,6 +107,18 @@ node scripts/refresh-token.js
 
 ```json
 { "access_token": "IGQ...", "expires_in": 5184000, "expires_in_days": 60 }
+```
+
+#### `scripts/refresh-facebook-token.js`
+
+Refreshes the Facebook user token (used for comment/reply flows) and returns new expiration info.
+
+```
+node scripts/refresh-facebook-token.js
+```
+
+```json
+{ "access_token": "EAA...", "expires_in": 5184000, "expires_in_days": 60 }
 ```
 
 #### `scripts/get-profile.js`
@@ -184,11 +201,11 @@ node scripts/post-image.js --caption "Caption" ./img1.png ./img2.png ./img3.jpg
 ```
 
 ```json
-{ "id": "18158...", "type": "IMAGE" }
+{ "id": "18158...", "permalink": "https://www.instagram.com/p/...", "type": "IMAGE" }
 ```
 
 ```json
-{ "id": "18068...", "type": "CAROUSEL" }
+{ "id": "18068...", "permalink": "https://www.instagram.com/p/...", "type": "CAROUSEL" }
 ```
 
 **Detection logic**:
@@ -216,11 +233,11 @@ node scripts/post-video.js --caption "Caption" https://example.com/a.mp4 https:/
 ```
 
 ```json
-{ "id": "18158...", "type": "REELS" }
+{ "id": "18158...", "permalink": "https://www.instagram.com/reel/...", "type": "REELS" }
 ```
 
 ```json
-{ "id": "18068...", "type": "CAROUSEL" }
+{ "id": "18068...", "permalink": "https://www.instagram.com/p/...", "type": "CAROUSEL" }
 ```
 
 **Detection logic**:
@@ -240,7 +257,9 @@ node scripts/post-video.js --caption "Caption" https://example.com/a.mp4 https:/
 
 #### `scripts/get-comments.js`
 
-Fetches comments and replies for a specific post.
+Fetches comments and replies for a specific post. Uses the Facebook Graph API (`graph.facebook.com`) with `FACEBOOK_USER_ACCESS_TOKEN`.
+
+For carousel posts, if the parent media has no comments, the script automatically fetches comments from each child media item as a fallback. In this case, each comment includes an additional `media_id` field indicating which child it belongs to, and a `meta.source: "carousel-children"` field is added.
 
 ```
 node scripts/get-comments.js <media-id>
@@ -266,7 +285,7 @@ node scripts/get-comments.js <media-id>
 
 #### `scripts/post-comment.js`
 
-Creates a comment on a post.
+Creates a comment on a post. Uses the Facebook Graph API (`graph.facebook.com`) with `FACEBOOK_USER_ACCESS_TOKEN`.
 
 ```
 node scripts/post-comment.js <media-id> --text "Comment text"
@@ -278,7 +297,7 @@ node scripts/post-comment.js <media-id> --text "Comment text"
 
 #### `scripts/reply-comment.js`
 
-Creates a reply to a comment.
+Creates a reply to a comment. Uses the Facebook Graph API (`graph.facebook.com`) with `FACEBOOK_USER_ACCESS_TOKEN`.
 
 ```
 node scripts/reply-comment.js <comment-id> --text "Reply text"
@@ -287,43 +306,6 @@ node scripts/reply-comment.js <comment-id> --text "Reply text"
 ```json
 { "id": "17860..." }
 ```
-
----
-
-## SKILL.md Specification
-
-`SKILL.md` at the project root is the entrypoint that tells the agent what this skill does and how to use it.
-
-### Frontmatter
-
-```yaml
----
-name: instagram
-description: >
-  Instagram 계정을 관리한다. 프로필 조회, 게시물 목록 확인, 이미지/캐러셀 게시,
-  댓글 조회 및 작성이 가능하다. 사용자가 Instagram 관련 작업을 요청할 때 사용한다.
-allowed-tools: Bash(node scripts/*)
----
-```
-
-- `name`: Skill name. Invocable via `/instagram`.
-- `description`: Specific enough for the agent to auto-select when relevant.
-- `allowed-tools`: Only allows running Node scripts under `scripts/`.
-
-### Body Content Guide
-
-The SKILL.md body should include:
-
-1. **개요**: 이 스킬이 무엇을 할 수 있는지 한 문단 요약.
-2. **사전 조건**: `.env` 파일에 인스타그램 자격 증명이 설정되어 있어야 함. 로컬 이미지 게시 시 `cloudflared` 필요.
-3. **사용 가능한 명령**: 각 스크립트의 용도, 호출 형식, 출력 예시.
-4. **워크플로우 지침**:
-   - 사용자가 `.env` 파일 경로를 명시하면 모든 명령에 `--env <path>`를 붙일 것.
-   - 모든 명령은 자동으로 토큰을 갱신하므로 별도 갱신 불필요.
-   - 이미지 게시 시 사용자에게 캡션을 확인받을 것.
-   - 게시 후 결과 ID와 함께 성공 여부를 보고할 것.
-   - 댓글 작성 시 내용을 사용자에게 확인받을 것.
-5. **에러 처리**: JSON `error` 필드가 있으면 사용자에게 원인을 설명할 것.
 
 ---
 
@@ -347,29 +329,17 @@ policy:
 
 | Item | Required | Description |
 |------|----------|-------------|
-| Node.js | Yes | v18+ |
-| `.env` file | Yes | `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_ACCESS_TOKEN` |
+| Node.js | Yes | v22+ |
+| `.env` file | Yes | See environment variables below |
 | `dotenv` | Yes | Included in `package.json` |
-| `cloudflared` | For local image posting | `brew install cloudflared` / `apt-get install cloudflared` |
+| `sharp` | Yes | Included in `package.json` (HEIC→JPEG conversion) |
+| `cloudflared` | For local file posting | `brew install cloudflared` / `apt-get install cloudflared` |
 
----
+### Environment Variables
 
-## Implementation Order
-
-### Phase 1: Scripts
-
-1. Create `scripts/` directory
-2. Write `scripts/_common.js`
-3. Write each script (in the order specified above)
-4. Test each script individually
-
-### Phase 2: Skill Definition
-
-5. Write `SKILL.md` at the project root
-6. Write `agents/openai.yaml`
-
-### Phase 3: Verification
-
-7. Test `/instagram` invocation in Claude Code
-8. Test auto-invocation via natural language ("내 인스타 프로필 보여줘")
-9. Test error cases (invalid media ID, nonexistent file, etc.)
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `INSTAGRAM_ACCESS_TOKEN` | Yes | Instagram long-lived user access token |
+| `FACEBOOK_USER_ACCESS_TOKEN` | Recommended | Facebook user token for comment/reply flows via `graph.facebook.com` |
+| `FACEBOOK_APP_ID` | For FB token refresh | Meta App ID for Facebook token exchange |
+| `FACEBOOK_APP_SECRET` | For FB token refresh | Meta App Secret for Facebook token exchange |

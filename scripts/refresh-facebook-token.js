@@ -1,10 +1,10 @@
-const { refreshFacebookUserToken, loadEnv, parseArgs } = require("./_common");
+const { refreshFbToken, loadEnv, parseArgs } = require("./_common");
 
 (async () => {
   try {
     const { named } = parseArgs();
     loadEnv(named.env);
-    const result = await refreshFacebookUserToken();
+    const result = await refreshFbToken();
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     process.exit(0);
   } catch (err) {
