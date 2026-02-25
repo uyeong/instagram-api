@@ -142,3 +142,22 @@ If the output contains an `error` field, an error has occurred. Explain the caus
 ```json
 { "error": "error message" }
 ```
+
+## Security
+
+### Token storage
+- `refreshIgToken()` and `refreshFbToken()` overwrite tokens in the `.env` file in plaintext. Do not commit `.env` to version control.
+- Create a dedicated Meta app with minimum required permissions (see below).
+
+### Local file upload
+- Local image/video posting starts a temporary [cloudflared Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/) to expose files so Instagram servers can download them.
+- The tunnel is active only during the upload and is shut down immediately after.
+- Only provide file paths you are comfortable briefly exposing to the internet.
+
+### Minimum required permissions
+When creating your Meta app, grant only these permissions:
+- `instagram_business_basic` — profile and media read
+- `instagram_content_publish` — image/video publishing
+- `instagram_manage_comments` — comment read/write
+- `pages_read_engagement` — required for comment API via Facebook Graph
+- `pages_show_list` — required for page-linked Instagram accounts

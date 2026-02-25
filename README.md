@@ -129,6 +129,12 @@ node scripts/post-video.js --caption "Hello" ./a.mp4 ./b.mov
 
 Local file posting uses a cloudflared Quick Tunnel to temporarily expose files so that Instagram's servers can download them. This works well for images and small videos, but large video files (30MB+) may experience instability — Quick Tunnels have no uptime SLA, and slow transfer speeds can cause Instagram to timeout during the download. For reliable large video posting, consider uploading the video to a public URL first and passing the URL directly.
 
+## Security
+
+- **Token storage**: Token refresh overwrites values in `.env` in plaintext. Never commit `.env` to version control.
+- **Local file upload**: A temporary cloudflared tunnel exposes files during upload only. The tunnel shuts down immediately after. Only provide file paths you are comfortable briefly exposing.
+- **Minimum permissions**: Create a dedicated Meta app and grant only: `instagram_business_basic`, `instagram_content_publish`, `instagram_manage_comments`, `pages_read_engagement`, `pages_show_list`.
+
 ## Requirements
 
 - Node.js v22+
@@ -296,6 +302,12 @@ node scripts/post-video.js --caption "안녕" ./a.mp4 ./b.mov
 ### 로컬 비디오 게시 시 참고사항
 
 로컬 파일 게시는 cloudflared Quick Tunnel을 사용하여 파일을 임시로 노출하고, Instagram 서버가 이를 다운로드하는 방식이다. 이미지나 작은 비디오에는 문제없이 동작하지만, 대용량 비디오(30MB 이상)의 경우 Quick Tunnel의 불안정성(SLA 없음)과 느린 전송 속도로 인해 Instagram 측 다운로드 타임아웃이 발생할 수 있다. 대용량 비디오를 안정적으로 게시하려면 먼저 공개 URL에 업로드한 뒤 URL을 직접 전달하는 것을 권장한다.
+
+## 보안
+
+- **토큰 저장**: 토큰 갱신 시 `.env` 파일에 평문으로 덮어쓴다. `.env`를 버전 관리에 절대 커밋하지 말 것.
+- **로컬 파일 업로드**: 업로드 중에만 cloudflared 터널로 파일이 임시 노출된다. 업로드 완료 즉시 터널이 종료된다. 인터넷에 잠시 노출되어도 괜찮은 파일만 사용할 것.
+- **최소 권한**: 전용 Meta 앱을 생성하고 필요한 최소 권한만 부여할 것: `instagram_business_basic`, `instagram_content_publish`, `instagram_manage_comments`, `pages_read_engagement`, `pages_show_list`.
 
 ## 요구사항
 

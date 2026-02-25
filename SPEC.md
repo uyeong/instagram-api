@@ -320,7 +320,7 @@ interface:
   brand_color: "#E4405F"
 
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false
 ```
 
 ---
